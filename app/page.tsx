@@ -1,11 +1,36 @@
+"use client"
+
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Zap, Wrench, Shield, Truck, Star, ArrowRight, Phone } from "lucide-react"
+import { useCategories } from "@/hooks/use-categories"
+import Link from "next/link"
 
 export default function HomePage() {
+  const { categories, loading: categoriesLoading } = useCategories()
+
+  // Mapear categorias do banco para as imagens e descrições
+  const categoryImages = {
+    "Fios e Cabos": "/fios-e-cabos-el-tricos-organizados.jpg",
+    "Disjuntores": "/disjuntores-el-tricos-em-quadro.jpg", 
+    "Tubos e Conexões": "/tubos-e-conex-es-hidr-ulicas.jpg",
+    "Ferramentas": "/ferramentas-el-tricas-profissionais.jpg",
+    "Iluminação": "/l-mpadas-led-e-lumin-rias-modernas.jpg",
+    "Bombas d'Água": "/bombas-d--gua-e-pressurizadores.jpg"
+  }
+
+  const categoryDescriptions = {
+    "Fios e Cabos": "Fios e cabos elétricos de todas as bitolas",
+    "Disjuntores": "Disjuntores e dispositivos de proteção",
+    "Tubos e Conexões": "Tubos PVC, PPR e conexões hidráulicas",
+    "Ferramentas": "Ferramentas elétricas e manuais",
+    "Iluminação": "Lâmpadas LED, luminárias e acessórios",
+    "Bombas d'Água": "Bombas centrífugas e pressurizadoras"
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -28,9 +53,11 @@ export default function HomePage() {
                   Atendimento de Segunda a Sexta das 07h30 às 17h30, Sábado das 07h30 às 12h00.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Button size="lg" className="text-lg px-8">
-                    Ver Produtos
-                    <ArrowRight className="ml-2 h-5 w-5" />
+                  <Button size="lg" className="text-lg px-8" asChild>
+                    <Link href="/produtos">
+                      Ver Produtos
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                    </Link>
                   </Button>
                   <Button variant="outline" size="lg" className="text-lg px-8 bg-transparent">
                     WhatsApp: (14) 99145-4789
@@ -115,52 +142,40 @@ export default function HomePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[
-                {
-                  title: "Fios e Cabos",
-                  description: "Fios e cabos elétricos de todas as bitolas",
-                  image: "/fios-e-cabos-el-tricos-organizados.jpg",
-                },
-                {
-                  title: "Disjuntores",
-                  description: "Disjuntores e dispositivos de proteção",
-                  image: "/disjuntores-el-tricos-em-quadro.jpg",
-                },
-                {
-                  title: "Tubos e Conexões",
-                  description: "Tubos PVC, PPR e conexões hidráulicas",
-                  image: "/tubos-e-conex-es-hidr-ulicas.jpg",
-                },
-                {
-                  title: "Ferramentas",
-                  description: "Ferramentas elétricas e manuais",
-                  image: "/ferramentas-el-tricas-profissionais.jpg",
-                },
-                {
-                  title: "Iluminação",
-                  description: "Lâmpadas LED, luminárias e acessórios",
-                  image: "/l-mpadas-led-e-lumin-rias-modernas.jpg",
-                },
-                {
-                  title: "Bombas d'Água",
-                  description: "Bombas centrífugas e pressurizadoras",
-                  image: "/bombas-d--gua-e-pressurizadores.jpg",
-                },
-              ].map((category, index) => (
-                <Card key={index} className="group cursor-pointer hover:shadow-lg transition-shadow">
-                  <div className="relative overflow-hidden rounded-t-lg">
-                    <img
-                      src={category.image || "/placeholder.svg"}
-                      alt={category.title}
-                      className="w-full h-48 object-cover group-hover:scale-105 transition-transform"
-                    />
-                  </div>
-                  <CardHeader>
-                    <CardTitle className="group-hover:text-primary transition-colors">{category.title}</CardTitle>
-                    <CardDescription>{category.description}</CardDescription>
-                  </CardHeader>
-                </Card>
-              ))}
+              {categoriesLoading ? (
+                // Loading state
+                Array.from({ length: 6 }).map((_, index) => (
+                  <Card key={index} className="animate-pulse">
+                    <div className="w-full h-48 bg-muted rounded-t-lg"></div>
+                    <CardHeader>
+                      <div className="h-6 bg-muted rounded mb-2"></div>
+                      <div className="h-4 bg-muted rounded w-3/4"></div>
+                    </CardHeader>
+                  </Card>
+                ))
+              ) : (
+                categories.map((category) => (
+                  <Link key={category.id} href={`/produtos?categoria=${category.id}`}>
+                    <Card className="group cursor-pointer hover:shadow-lg transition-shadow">
+                      <div className="relative overflow-hidden rounded-t-lg">
+                        <img
+                          src={categoryImages[category.name as keyof typeof categoryImages] || "/placeholder.svg"}
+                          alt={category.name}
+                          className="w-full h-48 object-cover group-hover:scale-105 transition-transform"
+                        />
+                      </div>
+                      <CardHeader>
+                        <CardTitle className="group-hover:text-primary transition-colors">
+                          {category.name}
+                        </CardTitle>
+                        <CardDescription>
+                          {categoryDescriptions[category.name as keyof typeof categoryDescriptions] || category.description || "Explore os produtos desta categoria"}
+                        </CardDescription>
+                      </CardHeader>
+                    </Card>
+                  </Link>
+                ))
+              )}
             </div>
           </div>
         </section>

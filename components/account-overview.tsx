@@ -1,41 +1,46 @@
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Package, Heart, MapPin, TrendingUp, Clock } from "lucide-react"
+import { Package, Heart, MapPin, TrendingUp, Clock, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { useMyAccount } from "@/components/my-account-provider"
+import { useSession } from "next-auth/react"
 
 export function AccountOverview() {
-  // Mock data
+  const { data: session, status } = useSession()
+  const { user, addresses, wishlist, loading } = useMyAccount()
+
+  // Dados reais do usuário
   const stats = {
-    totalOrders: 12,
-    favoriteItems: 8,
-    savedAddresses: 2,
-    loyaltyPoints: 450,
+    totalOrders: 0, // Será implementado com API de pedidos
+    favoriteItems: wishlist?.length || 0,
+    savedAddresses: addresses?.length || 0,
+    loyaltyPoints: 0, // Será implementado depois
   }
 
-  const recentOrders = [
-    {
-      id: "#12345",
-      date: "2024-01-15",
-      status: "Entregue",
-      total: 189.9,
-      items: 3,
-    },
-    {
-      id: "#12344",
-      date: "2024-01-10",
-      status: "Em trânsito",
-      total: 89.9,
-      items: 1,
-    },
-    {
-      id: "#12343",
-      date: "2024-01-05",
-      status: "Processando",
-      total: 245.5,
-      items: 5,
-    },
-  ]
+  if (status === 'loading' || loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Carregando dados da conta...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return (
+      <div className="text-center p-8">
+        <p>Você precisa estar logado para acessar esta página.</p>
+      </div>
+    )
+  }
+
+  // Pedidos reais serão implementados depois
+  const recentOrders: any[] = []
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -57,12 +62,13 @@ export function AccountOverview() {
     }
   }
 
+
   return (
     <div className="space-y-6">
       {/* Welcome Message */}
       <Card>
         <CardHeader>
-          <CardTitle>Bem-vindo de volta, João!</CardTitle>
+          <CardTitle>Bem-vindo de volta, {user?.name || session.user?.name || 'Usuário'}!</CardTitle>
           <CardDescription>Aqui está um resumo da sua conta e atividades recentes</CardDescription>
         </CardHeader>
       </Card>
@@ -130,40 +136,53 @@ export function AccountOverview() {
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {recentOrders.map((order) => (
-              <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <div className="bg-primary/10 p-2 rounded">
-                    <Package className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{order.id}</p>
-                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      <span>{new Date(order.date).toLocaleDateString("pt-BR")}</span>
-                      <span>•</span>
-                      <span>
-                        {order.items} {order.items === 1 ? "item" : "itens"}
-                      </span>
+          {recentOrders.length > 0 ? (
+            <div className="space-y-4">
+              {recentOrders.map((order) => (
+                <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="bg-primary/10 p-2 rounded">
+                      <Package className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{order.id}</p>
+                      <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        <span>{new Date(order.date).toLocaleDateString("pt-BR")}</span>
+                        <span>•</span>
+                        <span>
+                          {order.items} {order.items === 1 ? "item" : "itens"}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center space-x-4">
-                  <div className="text-right">
-                    <p className="font-medium">{formatPrice(order.total)}</p>
-                    <Badge variant="secondary" className={getStatusColor(order.status)}>
-                      {order.status}
-                    </Badge>
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <p className="font-medium">{formatPrice(order.total)}</p>
+                      <Badge variant="secondary" className={getStatusColor(order.status)}>
+                        {order.status}
+                      </Badge>
+                    </div>
+                    <Button variant="outline" size="sm">
+                      Ver Detalhes
+                    </Button>
                   </div>
-                  <Button variant="outline" size="sm">
-                    Ver Detalhes
-                  </Button>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground mb-2">Você ainda não fez nenhum pedido</p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Explore nossos produtos e faça seu primeiro pedido!
+              </p>
+              <Button asChild>
+                <Link href="/produtos">Ver Produtos</Link>
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

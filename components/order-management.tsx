@@ -25,96 +25,23 @@ import {
   MoreHorizontal,
   MessageSquare,
   Printer,
+  Loader2,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-
-// Mock orders data
-const orders = [
-  {
-    id: "#12345",
-    customer: {
-      name: "João Silva",
-      email: "joao.silva@email.com",
-      phone: "(11) 99999-9999",
-    },
-    date: "2024-01-15T10:30:00",
-    status: "Processando",
-    paymentStatus: "Pago",
-    total: 189.9,
-    items: [
-      { name: "Fio Flexível 2,5mm² 100m", quantity: 2, price: 89.9 },
-      { name: "Disjuntor Bipolar 25A", quantity: 1, price: 45.5 },
-    ],
-    shipping: {
-      method: "Entrega Expressa",
-      address: "Rua das Flores, 123 - São Paulo, SP",
-      tracking: null,
-    },
-  },
-  {
-    id: "#12344",
-    customer: {
-      name: "Maria Santos",
-      email: "maria.santos@email.com",
-      phone: "(11) 88888-8888",
-    },
-    date: "2024-01-14T15:45:00",
-    status: "Enviado",
-    paymentStatus: "Pago",
-    total: 89.9,
-    items: [{ name: "Lâmpada LED 12W", quantity: 4, price: 22.45 }],
-    shipping: {
-      method: "Correios PAC",
-      address: "Av. Paulista, 456 - São Paulo, SP",
-      tracking: "BR123456789",
-    },
-  },
-  {
-    id: "#12343",
-    customer: {
-      name: "Carlos Oliveira",
-      email: "carlos.oliveira@email.com",
-      phone: "(11) 77777-7777",
-    },
-    date: "2024-01-13T09:15:00",
-    status: "Entregue",
-    paymentStatus: "Pago",
-    total: 245.5,
-    items: [
-      { name: "Bomba Centrífuga 1/2CV", quantity: 1, price: 199.9 },
-      { name: "Tubo PVC 32mm 6m", quantity: 3, price: 15.2 },
-    ],
-    shipping: {
-      method: "Entrega Própria",
-      address: "Rua do Comércio, 789 - São Paulo, SP",
-      tracking: "ENTREGUE",
-    },
-  },
-  {
-    id: "#12342",
-    customer: {
-      name: "Ana Costa",
-      email: "ana.costa@email.com",
-      phone: "(11) 66666-6666",
-    },
-    date: "2024-01-12T14:20:00",
-    status: "Cancelado",
-    paymentStatus: "Estornado",
-    total: 156.8,
-    items: [{ name: "Furadeira de Impacto 650W", quantity: 1, price: 156.8 }],
-    shipping: {
-      method: "Correios SEDEX",
-      address: "Rua das Palmeiras, 321 - São Paulo, SP",
-      tracking: null,
-    },
-  },
-]
+import { useAdminOrders } from "@/hooks/use-admin-orders"
+import { toast } from "@/hooks/use-toast"
 
 export function OrderManagement() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [paymentFilter, setPaymentFilter] = useState("all")
-  const [selectedOrder, setSelectedOrder] = useState<(typeof orders)[0] | null>(null)
+  const [selectedOrder, setSelectedOrder] = useState<any>(null)
+
+  const { orders, loading, error, updateOrderStatus, getOrderDetails } = useAdminOrders({
+    search: searchTerm || undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    paymentStatus: paymentFilter !== 'all' ? paymentFilter : undefined
+  })
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -129,14 +56,16 @@ export function OrderManagement() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Entregue":
+      case "delivered":
         return "bg-green-100 text-green-800"
-      case "Enviado":
+      case "shipped":
         return "bg-blue-100 text-blue-800"
-      case "Processando":
+      case "processing":
         return "bg-yellow-100 text-yellow-800"
-      case "Cancelado":
+      case "cancelled":
         return "bg-red-100 text-red-800"
+      case "pending":
+        return "bg-orange-100 text-orange-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
@@ -144,11 +73,13 @@ export function OrderManagement() {
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
-      case "Pago":
+      case "paid":
         return "bg-green-100 text-green-800"
-      case "Pendente":
+      case "pending":
         return "bg-yellow-100 text-yellow-800"
-      case "Estornado":
+      case "refunded":
+        return "bg-red-100 text-red-800"
+      case "failed":
         return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
@@ -157,32 +88,67 @@ export function OrderManagement() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "Entregue":
+      case "delivered":
         return <CheckCircle className="h-3 w-3" />
-      case "Enviado":
+      case "shipped":
         return <Truck className="h-3 w-3" />
-      case "Processando":
+      case "processing":
         return <Clock className="h-3 w-3" />
-      case "Cancelado":
+      case "cancelled":
         return <X className="h-3 w-3" />
       default:
         return null
     }
   }
 
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch =
-      order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer.email.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter
-    const matchesPayment = paymentFilter === "all" || order.paymentStatus === paymentFilter
-    return matchesSearch && matchesStatus && matchesPayment
-  })
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "delivered": return "Entregue"
+      case "shipped": return "Enviado"
+      case "processing": return "Processando"
+      case "cancelled": return "Cancelado"
+      case "pending": return "Pendente"
+      default: return status
+    }
+  }
 
-  const updateOrderStatus = (orderId: string, newStatus: string) => {
-    // TODO: Implement status update
-    console.log(`Updating order ${orderId} to status: ${newStatus}`)
+  const getPaymentStatusLabel = (status: string) => {
+    switch (status) {
+      case "paid": return "Pago"
+      case "pending": return "Pendente"
+      case "refunded": return "Estornado"
+      case "failed": return "Falhou"
+      default: return status
+    }
+  }
+
+  const handleViewDetails = async (order: any) => {
+    try {
+      const details = await getOrderDetails(order.id)
+      setSelectedOrder(details)
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar detalhes do pedido",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleUpdateStatus = async (orderId: string, newStatus: string) => {
+    try {
+      await updateOrderStatus(orderId, newStatus)
+      toast({
+        title: "Sucesso",
+        description: "Status do pedido atualizado com sucesso!",
+      })
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar status do pedido",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -207,10 +173,11 @@ export function OrderManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="Processando">Processando</SelectItem>
-                <SelectItem value="Enviado">Enviado</SelectItem>
-                <SelectItem value="Entregue">Entregue</SelectItem>
-                <SelectItem value="Cancelado">Cancelado</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="processing">Processando</SelectItem>
+                <SelectItem value="shipped">Enviado</SelectItem>
+                <SelectItem value="delivered">Entregue</SelectItem>
+                <SelectItem value="cancelled">Cancelado</SelectItem>
               </SelectContent>
             </Select>
 
@@ -220,9 +187,10 @@ export function OrderManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os pagamentos</SelectItem>
-                <SelectItem value="Pago">Pago</SelectItem>
-                <SelectItem value="Pendente">Pendente</SelectItem>
-                <SelectItem value="Estornado">Estornado</SelectItem>
+                <SelectItem value="paid">Pago</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="refunded">Estornado</SelectItem>
+                <SelectItem value="failed">Falhou</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -232,88 +200,104 @@ export function OrderManagement() {
       {/* Orders List */}
       <Card>
         <CardHeader>
-          <CardTitle>Pedidos ({filteredOrders.length})</CardTitle>
+          <CardTitle>Pedidos ({orders.length})</CardTitle>
           <CardDescription>Gerencie todos os pedidos da loja</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {filteredOrders.map((order) => (
-              <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <div className="bg-primary/10 p-2 rounded">
-                    <Package className="h-5 w-5 text-primary" />
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="ml-2">Carregando pedidos...</span>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <p className="text-red-500 mb-4">Erro ao carregar pedidos: {error}</p>
+              <Button onClick={() => window.location.reload()}>Tentar novamente</Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {orders.map((order) => (
+                <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="bg-primary/10 p-2 rounded">
+                      <Package className="h-5 w-5 text-primary" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="font-medium">{order.order_number}</h3>
+                        <Badge className={getStatusColor(order.status)}>
+                          {getStatusIcon(order.status)}
+                          {getStatusLabel(order.status)}
+                        </Badge>
+                        <Badge className={getPaymentStatusColor(order.payment_status)}>
+                          {getPaymentStatusLabel(order.payment_status)}
+                        </Badge>
+                      </div>
+
+                      <div className="text-sm text-muted-foreground">
+                        <p>
+                          {order.user.name} • {order.user.email}
+                        </p>
+                        <p>
+                          {formatDate(order.created_at)} • {order.order_items?.length || 0} {order.order_items?.length === 1 ? "item" : "itens"}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-1">
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <p className="font-medium">{formatPrice(order.total_amount)}</p>
+                      {order.tracking_code && (
+                        <p className="text-sm text-muted-foreground">Rastreamento: {order.tracking_code}</p>
+                      )}
+                    </div>
+
                     <div className="flex items-center space-x-2">
-                      <h3 className="font-medium">{order.id}</h3>
-                      <Badge className={getStatusColor(order.status)}>
-                        {getStatusIcon(order.status)}
-                        {order.status}
-                      </Badge>
-                      <Badge className={getPaymentStatusColor(order.paymentStatus)}>{order.paymentStatus}</Badge>
-                    </div>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" onClick={() => handleViewDetails(order)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            Ver Detalhes
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>Detalhes do Pedido {order.order_number}</DialogTitle>
+                            <DialogDescription>Informações completas do pedido</DialogDescription>
+                          </DialogHeader>
+                          {selectedOrder && <OrderDetails order={selectedOrder} onStatusUpdate={handleUpdateStatus} />}
+                        </DialogContent>
+                      </Dialog>
 
-                    <div className="text-sm text-muted-foreground">
-                      <p>
-                        {order.customer.name} • {order.customer.email}
-                      </p>
-                      <p>
-                        {formatDate(order.date)} • {order.items.length} {order.items.length === 1 ? "item" : "itens"}
-                      </p>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>
+                            <Printer className="h-4 w-4 mr-2" />
+                            Imprimir Etiqueta
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <MessageSquare className="h-4 w-4 mr-2" />
+                            Contatar Cliente
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <Truck className="h-4 w-4 mr-2" />
+                            Atualizar Rastreamento
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>
-
-                <div className="flex items-center space-x-4">
-                  <div className="text-right">
-                    <p className="font-medium">{formatPrice(order.total)}</p>
-                    <p className="text-sm text-muted-foreground">{order.shipping.method}</p>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={() => setSelectedOrder(order)}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          Ver Detalhes
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-2xl">
-                        <DialogHeader>
-                          <DialogTitle>Detalhes do Pedido {order.id}</DialogTitle>
-                          <DialogDescription>Informações completas do pedido</DialogDescription>
-                        </DialogHeader>
-                        {selectedOrder && <OrderDetails order={selectedOrder} onStatusUpdate={updateOrderStatus} />}
-                      </DialogContent>
-                    </Dialog>
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Printer className="h-4 w-4 mr-2" />
-                          Imprimir Etiqueta
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <MessageSquare className="h-4 w-4 mr-2" />
-                          Contatar Cliente
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Truck className="h-4 w-4 mr-2" />
-                          Atualizar Rastreamento
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -324,7 +308,7 @@ function OrderDetails({
   order,
   onStatusUpdate,
 }: {
-  order: (typeof orders)[0]
+  order: any
   onStatusUpdate: (orderId: string, status: string) => void
 }) {
   const formatPrice = (price: number) => {
@@ -338,9 +322,9 @@ function OrderDetails({
     return new Date(dateString).toLocaleString("pt-BR")
   }
 
-  const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const shipping = 15.9
-  const total = subtotal + shipping
+  const subtotal = order.order_items?.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) || 0
+  const shipping = order.shipping_cost || 0
+  const total = order.total_amount || 0
 
   return (
     <div className="space-y-6">
@@ -350,14 +334,16 @@ function OrderDetails({
           <h4 className="font-medium mb-2">Informações do Cliente</h4>
           <div className="space-y-1 text-sm">
             <p>
-              <strong>Nome:</strong> {order.customer.name}
+              <strong>Nome:</strong> {order.user.name}
             </p>
             <p>
-              <strong>Email:</strong> {order.customer.email}
+              <strong>Email:</strong> {order.user.email}
             </p>
-            <p>
-              <strong>Telefone:</strong> {order.customer.phone}
-            </p>
+            {order.user.phone && (
+              <p>
+                <strong>Telefone:</strong> {order.user.phone}
+              </p>
+            )}
           </div>
         </div>
 
@@ -365,13 +351,16 @@ function OrderDetails({
           <h4 className="font-medium mb-2">Informações do Pedido</h4>
           <div className="space-y-1 text-sm">
             <p>
-              <strong>Data:</strong> {formatDate(order.date)}
+              <strong>Número:</strong> {order.order_number}
+            </p>
+            <p>
+              <strong>Data:</strong> {formatDate(order.created_at)}
             </p>
             <p>
               <strong>Status:</strong> {order.status}
             </p>
             <p>
-              <strong>Pagamento:</strong> {order.paymentStatus}
+              <strong>Pagamento:</strong> {order.payment_status}
             </p>
           </div>
         </div>
@@ -381,15 +370,26 @@ function OrderDetails({
       <div>
         <h4 className="font-medium mb-3">Itens do Pedido</h4>
         <div className="space-y-2">
-          {order.items.map((item, index) => (
+          {order.order_items?.map((item: any, index: number) => (
             <div key={index} className="flex justify-between items-center py-2 border-b">
-              <div>
-                <p className="font-medium">{item.name}</p>
-                <p className="text-sm text-muted-foreground">Quantidade: {item.quantity}</p>
+              <div className="flex items-center space-x-3">
+                {item.product?.images?.[0] && (
+                  <img 
+                    src={item.product.images[0].url} 
+                    alt={item.product.name}
+                    className="w-12 h-12 object-cover rounded border"
+                  />
+                )}
+                <div>
+                  <p className="font-medium">{item.product?.name || 'Produto não encontrado'}</p>
+                  <p className="text-sm text-muted-foreground">
+                    SKU: {item.product?.sku || 'N/A'} • Quantidade: {item.quantity}
+                  </p>
+                </div>
               </div>
               <p className="font-medium">{formatPrice(item.price * item.quantity)}</p>
             </div>
-          ))}
+          )) || []}
         </div>
 
         <div className="mt-4 space-y-2 text-sm">
@@ -409,22 +409,31 @@ function OrderDetails({
       </div>
 
       {/* Shipping */}
-      <div>
-        <h4 className="font-medium mb-2">Informações de Entrega</h4>
-        <div className="space-y-1 text-sm">
-          <p>
-            <strong>Método:</strong> {order.shipping.method}
-          </p>
-          <p>
-            <strong>Endereço:</strong> {order.shipping.address}
-          </p>
-          {order.shipping.tracking && (
+      {order.address && (
+        <div>
+          <h4 className="font-medium mb-2">Informações de Entrega</h4>
+          <div className="space-y-1 text-sm">
             <p>
-              <strong>Rastreamento:</strong> {order.shipping.tracking}
+              <strong>Endereço:</strong> {order.address.street}, {order.address.number}
+              {order.address.complement && `, ${order.address.complement}`}
             </p>
-          )}
+            <p>
+              <strong>Bairro:</strong> {order.address.neighborhood}
+            </p>
+            <p>
+              <strong>Cidade:</strong> {order.address.city} - {order.address.state}
+            </p>
+            <p>
+              <strong>CEP:</strong> {order.address.zip_code}
+            </p>
+            {order.tracking_code && (
+              <p>
+                <strong>Rastreamento:</strong> {order.tracking_code}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-2 pt-4 border-t">
@@ -433,10 +442,11 @@ function OrderDetails({
             <SelectValue placeholder="Alterar status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="Processando">Processando</SelectItem>
-            <SelectItem value="Enviado">Enviado</SelectItem>
-            <SelectItem value="Entregue">Entregue</SelectItem>
-            <SelectItem value="Cancelado">Cancelado</SelectItem>
+            <SelectItem value="pending">Pendente</SelectItem>
+            <SelectItem value="processing">Processando</SelectItem>
+            <SelectItem value="shipped">Enviado</SelectItem>
+            <SelectItem value="delivered">Entregue</SelectItem>
+            <SelectItem value="cancelled">Cancelado</SelectItem>
           </SelectContent>
         </Select>
 

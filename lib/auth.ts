@@ -1,14 +1,36 @@
 import { NextAuthOptions } from 'next-auth'
-import { SupabaseAdapter } from '@auth/supabase-adapter'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
-import { supabase } from './supabase'
+import { supabase, tables } from './supabase-fixed'
+import bcrypt from 'bcryptjs'
 
 export const authOptions: NextAuthOptions = {
-  adapter: SupabaseAdapter({
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  }),
+  // Removendo adapter para usar autenticação customizada
+  session: {
+    strategy: 'jwt',
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = user.role
+        token.id = user.id
+        token.is_admin = user.role === 'admin'
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.id as string
+        session.user.role = token.role as string
+        session.user.is_admin = token.is_admin as boolean
+      }
+      return session
+    },
+  },
+  pages: {
+    signIn: '/login',
+    signUp: '/cadastro',
+  },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -28,7 +50,7 @@ export const authOptions: NextAuthOptions = {
         try {
           // Verificar se o usuário existe no Supabase
           const { data: user, error } = await supabase
-            .from('Rona_Users')
+            .from(tables.users)
             .select('*')
             .eq('email', credentials.email)
             .eq('is_active', true)
@@ -38,8 +60,13 @@ export const authOptions: NextAuthOptions = {
             return null
           }
 
-          // Aqui você implementaria a verificação de senha
-          // Por enquanto, vamos retornar o usuário se existir
+          // Verificar senha
+          const isValidPassword = await bcrypt.compare(credentials.password, user.password)
+          
+          if (!isValidPassword) {
+            return null
+          }
+
           return {
             id: user.id,
             email: user.email,
@@ -53,29 +80,6 @@ export const authOptions: NextAuthOptions = {
       }
     })
   ],
-  session: {
-    strategy: 'jwt',
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.role = user.role
-        token.id = user.id
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id as string
-        session.user.role = token.role as string
-      }
-      return session
-    },
-  },
-  pages: {
-    signIn: '/login',
-    signUp: '/cadastro',
-  },
 }
 
 // Funções auxiliares para gerenciar usuários
@@ -89,7 +93,7 @@ export async function createUser(userData: {
   role?: 'customer' | 'vendor' | 'admin'
 }) {
   const { data, error } = await supabase
-    .from('Rona_Users')
+    .from(tables.users)
     .insert([{
       ...userData,
       role: userData.role || 'customer',
@@ -107,7 +111,7 @@ export async function createUser(userData: {
 
 export async function getUserById(id: string) {
   const { data, error } = await supabase
-    .from('Rona_Users')
+    .from(tables.users)
     .select('*')
     .eq('id', id)
     .single()
@@ -121,7 +125,7 @@ export async function getUserById(id: string) {
 
 export async function getUserByEmail(email: string) {
   const { data, error } = await supabase
-    .from('Rona_Users')
+    .from(tables.users)
     .select('*')
     .eq('email', email)
     .single()
@@ -143,7 +147,7 @@ export async function updateUser(id: string, updates: Partial<{
   is_active: boolean
 }>) {
   const { data, error } = await supabase
-    .from('Rona_Users')
+    .from(tables.users)
     .update(updates)
     .eq('id', id)
     .select()
@@ -158,7 +162,7 @@ export async function updateUser(id: string, updates: Partial<{
 
 export async function deleteUser(id: string) {
   const { error } = await supabase
-    .from('Rona_Users')
+    .from(tables.users)
     .delete()
     .eq('id', id)
 

@@ -3,26 +3,62 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
-import { Eye, EyeOff, Mail, Lock } from "lucide-react"
+import { Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { toast } from "@/hooks/use-toast"
 
 export function LoginForm() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     rememberMe: false,
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Implement login logic
-    console.log("Login attempt:", formData)
+    setLoading(true)
+
+    try {
+      const result = await signIn('credentials', {
+        email: formData.email,
+        password: formData.password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        toast({
+          title: "Erro",
+          description: "Email ou senha incorretos",
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: "Sucesso",
+        description: "Login realizado com sucesso!",
+      })
+
+      router.push('/minha-conta')
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao fazer login",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleInputChange = (field: string, value: string | boolean) => {
@@ -93,8 +129,15 @@ export function LoginForm() {
         </Link>
       </div>
 
-      <Button type="submit" className="w-full" size="lg">
-        Entrar
+      <Button type="submit" className="w-full" size="lg" disabled={loading}>
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Entrando...
+          </>
+        ) : (
+          "Entrar"
+        )}
       </Button>
 
       <div className="relative">

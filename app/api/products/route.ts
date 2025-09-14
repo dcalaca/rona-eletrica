@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabase, tables } from '@/lib/supabase-fixed'
 
 // GET /api/products - Listar produtos
 export async function GET(request: NextRequest) {
@@ -7,8 +7,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '12')
-    const category = searchParams.get('category')
-    const brand = searchParams.get('brand')
+    const categories = searchParams.get('categories')?.split(',').filter(Boolean) || []
+    const brands = searchParams.get('brands')?.split(',').filter(Boolean) || []
     const search = searchParams.get('search')
     const minPrice = searchParams.get('min_price')
     const maxPrice = searchParams.get('max_price')
@@ -17,22 +17,22 @@ export async function GET(request: NextRequest) {
     const featured = searchParams.get('featured')
 
     let query = supabase
-      .from('Rona_Products')
+      .from(tables.products)
       .select(`
         *,
-        category: Rona_Categories(*),
-        brand: Rona_Brands(*),
-        images: Rona_Product_Images(*)
+        category: ${tables.categories}(*),
+        brand: ${tables.brands}(*),
+        images: ${tables.productImages}(*)
       `)
       .eq('is_active', true)
 
     // Filtros
-    if (category) {
-      query = query.eq('category_id', category)
+    if (categories.length > 0) {
+      query = query.in('category_id', categories)
     }
 
-    if (brand) {
-      query = query.eq('brand_id', brand)
+    if (brands.length > 0) {
+      query = query.in('brand_id', brands)
     }
 
     if (search) {
@@ -51,6 +51,11 @@ export async function GET(request: NextRequest) {
       query = query.eq('is_featured', true)
     }
 
+    // Para ofertas, filtrar produtos com desconto (preço menor que preço de comparação)
+    if (searchParams.get('offers') === 'true') {
+      query = query.not('compare_price', 'is', null)
+      }
+
     // Ordenação
     query = query.order(sortBy, { ascending: sortOrder === 'asc' })
 
@@ -66,17 +71,45 @@ export async function GET(request: NextRequest) {
       throw new Error(error.message)
     }
 
+    // Filtrar produtos em oferta se necessário
+    let filteredProducts = products || []
+    if (searchParams.get('offers') === 'true') {
+      try {
+        filteredProducts = (products || []).filter(product => {
+          if (!product || !product.compare_price) return false
+          return product.price < product.compare_price
+        })
+        } catch (filterError) {
+        console.error('❌ [PRODUCTS API] Erro no filtro:', filterError)
+        filteredProducts = []
+      }
+    }
+
     return NextResponse.json({
-      products,
+      products: filteredProducts,
       pagination: {
         page,
         limit,
-        total: count || 0,
-        pages: Math.ceil((count || 0) / limit)
+        total: filteredProducts.length,
+        pages: Math.ceil(filteredProducts.length / limit)
       }
     })
   } catch (error) {
-    console.error('Erro ao buscar produtos:', error)
+    console.error('❌ [PRODUCTS API] Erro ao buscar produtos:', error)
+    
+    // Se for erro de ofertas, retornar array vazio em vez de erro
+    if (searchParams.get('offers') === 'true') {
+      return NextResponse.json({
+        products: [],
+        pagination: {
+          page: 1,
+          limit: 12,
+          total: 0,
+          pages: 0
+        }
+      })
+    }
+    
     return NextResponse.json(
       { error: 'Erro ao buscar produtos' },
       { status: 500 }
@@ -90,13 +123,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     
     const { data, error } = await supabase
-      .from('Rona_Products')
+      .from(tables.products)
       .insert([body])
       .select(`
         *,
-        category: Rona_Categories(*),
-        brand: Rona_Brands(*),
-        images: Rona_Product_Images(*)
+        category: ${tables.categories}(*),
+        brand: ${tables.brands}(*),
+        images: ${tables.productImages}(*)
       `)
       .single()
 

@@ -3,16 +3,24 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { signIn } from "next-auth/react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Eye, EyeOff, User, Mail, Lock, Phone, Calendar } from "lucide-react"
+import { Eye, EyeOff, User, Mail, Lock, Phone, Calendar, Loader2 } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
+import { TermsModal } from "@/components/terms-modal"
+import { PrivacyModal } from "@/components/privacy-modal"
 
 export function RegisterForm() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -26,21 +34,77 @@ export function RegisterForm() {
     acceptNewsletter: false,
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (formData.password !== formData.confirmPassword) {
-      alert("As senhas não coincidem")
+      toast({
+        title: "Erro",
+        description: "As senhas não coincidem",
+        variant: "destructive",
+      })
       return
     }
 
     if (!formData.acceptTerms) {
-      alert("Você deve aceitar os termos de uso")
+      toast({
+        title: "Erro",
+        description: "Você deve aceitar os termos de uso",
+        variant: "destructive",
+      })
       return
     }
 
-    // TODO: Implement registration logic
-    console.log("Registration attempt:", formData)
+    setLoading(true)
+
+    try {
+      // Criar usuário no Supabase
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: `${formData.firstName} ${formData.lastName}`,
+          email: formData.email,
+          phone: formData.phone,
+          birth_date: formData.birthDate,
+          gender: formData.gender,
+          password: formData.password,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erro ao criar conta')
+      }
+
+      // Fazer login automaticamente
+      const result = await signIn('credentials', {
+        email: formData.email,
+        password: formData.password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        throw new Error('Erro ao fazer login')
+      }
+
+      toast({
+        title: "Sucesso",
+        description: "Conta criada com sucesso!",
+      })
+
+      router.push('/minha-conta')
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : 'Erro ao criar conta',
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleInputChange = (field: string, value: string | boolean) => {
@@ -203,40 +267,57 @@ export function RegisterForm() {
       </div>
 
       <div className="space-y-3">
-        <div className="flex items-start space-x-2">
+        <div className="flex items-start space-x-3 p-3 border rounded-lg bg-muted/30">
           <Checkbox
             id="acceptTerms"
             checked={formData.acceptTerms}
             onCheckedChange={(checked) => handleInputChange("acceptTerms", checked as boolean)}
-            className="mt-1"
+            className="mt-1 flex-shrink-0"
           />
-          <Label htmlFor="acceptTerms" className="text-sm leading-relaxed">
-            Eu aceito os{" "}
-            <a href="/termos" className="text-primary hover:underline">
-              Termos de Uso
-            </a>{" "}
-            e a{" "}
-            <a href="/privacidade" className="text-primary hover:underline">
-              Política de Privacidade
-            </a>
-          </Label>
+          <div className="flex-1">
+            <Label htmlFor="acceptTerms" className="text-sm leading-relaxed cursor-pointer">
+              <span className={formData.acceptTerms ? "font-medium text-green-700" : ""}>
+                Eu aceito os{" "}
+                <TermsModal onAccept={() => handleInputChange("acceptTerms", true)}>
+                  <span className="text-primary hover:underline font-medium cursor-pointer">
+                    Termos de Uso
+                  </span>
+                </TermsModal>{" "}
+                e a{" "}
+                <PrivacyModal onAccept={() => handleInputChange("acceptTerms", true)}>
+                  <span className="text-primary hover:underline font-medium cursor-pointer">
+                    Política de Privacidade
+                  </span>
+                </PrivacyModal>
+              </span>
+            </Label>
+          </div>
         </div>
 
-        <div className="flex items-start space-x-2">
+        <div className="flex items-start space-x-3">
           <Checkbox
             id="acceptNewsletter"
             checked={formData.acceptNewsletter}
             onCheckedChange={(checked) => handleInputChange("acceptNewsletter", checked as boolean)}
-            className="mt-1"
+            className="mt-1 flex-shrink-0"
           />
-          <Label htmlFor="acceptNewsletter" className="text-sm leading-relaxed">
-            Quero receber ofertas e novidades por e-mail
-          </Label>
+          <div className="flex-1">
+            <Label htmlFor="acceptNewsletter" className="text-sm leading-relaxed cursor-pointer">
+              Quero receber ofertas e novidades por e-mail
+            </Label>
+          </div>
         </div>
       </div>
 
-      <Button type="submit" className="w-full" size="lg">
-        Criar Conta
+      <Button type="submit" className="w-full" size="lg" disabled={loading}>
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Criando conta...
+          </>
+        ) : (
+          "Criar Conta"
+        )}
       </Button>
     </form>
   )

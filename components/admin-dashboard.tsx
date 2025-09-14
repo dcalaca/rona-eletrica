@@ -1,3 +1,6 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -13,58 +16,105 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  Loader2,
 } from "lucide-react"
 
+interface DashboardStats {
+  totalRevenue: number
+  revenueChange: number
+  totalOrders: number
+  ordersChange: number
+  totalCustomers: number
+  customersChange: number
+  totalProducts: number
+  productsChange: number
+}
+
 export function AdminDashboard() {
-  // Mock data
-  const stats = {
-    totalRevenue: 45678.9,
-    revenueChange: 12.5,
-    totalOrders: 1234,
-    ordersChange: -2.3,
-    totalCustomers: 5678,
-    customersChange: 8.7,
-    totalProducts: 892,
-    productsChange: 5.2,
+  const [stats, setStats] = useState<DashboardStats>({
+    totalRevenue: 0,
+    revenueChange: 0,
+    totalOrders: 0,
+    ordersChange: 0,
+    totalCustomers: 0,
+    customersChange: 0,
+    totalProducts: 0,
+    productsChange: 0,
+  })
+  const [loading, setLoading] = useState(true)
+  const [recentOrders, setRecentOrders] = useState<any[]>([])
+  const [lowStockProducts, setLowStockProducts] = useState<any[]>([])
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true)
+        
+        // Buscar estatísticas em paralelo
+        const [ordersRes, customersRes, productsRes] = await Promise.all([
+          fetch('/api/admin/orders?limit=5'),
+          fetch('/api/admin/customers?limit=1'),
+          fetch('/api/admin/products?limit=1')
+        ])
+
+        const ordersData = await ordersRes.json()
+        const customersData = await customersRes.json()
+        const productsData = await productsRes.json()
+
+        // Calcular receita total
+        const totalRevenue = ordersData.orders?.reduce((sum: number, order: any) => 
+          sum + (order.total_amount || 0), 0) || 0
+
+        // Calcular mudanças (simulado por enquanto)
+        const revenueChange = 12.5 // TODO: Calcular mudança real
+        const ordersChange = -2.3 // TODO: Calcular mudança real
+        const customersChange = 8.7 // TODO: Calcular mudança real
+        const productsChange = 5.2 // TODO: Calcular mudança real
+
+        setStats({
+          totalRevenue,
+          revenueChange,
+          totalOrders: ordersData.pagination?.total || 0,
+          ordersChange,
+          totalCustomers: customersData.pagination?.total || 0, // Usar total da paginação
+          customersChange,
+          totalProducts: productsData.pagination?.total || 0, // Usar total da paginação
+          productsChange,
+        })
+
+        // Definir pedidos recentes
+        setRecentOrders(ordersData.orders?.slice(0, 4) || [])
+
+        // Buscar produtos com estoque baixo
+        const lowStockRes = await fetch('/api/admin/products?limit=10')
+        const lowStockData = await lowStockRes.json()
+        
+        const lowStock = lowStockData.products?.filter((product: any) => 
+          product.stock_quantity <= product.min_stock
+        ).slice(0, 4) || []
+        
+        setLowStockProducts(lowStock)
+
+      } catch (error) {
+        console.error('Erro ao buscar dados do dashboard:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDashboardData()
+  }, [])
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "delivered": return "Entregue"
+      case "shipped": return "Enviado"
+      case "processing": return "Processando"
+      case "cancelled": return "Cancelado"
+      case "pending": return "Pendente"
+      default: return status
+    }
   }
-
-  const recentOrders = [
-    {
-      id: "#12345",
-      customer: "João Silva",
-      total: 189.9,
-      status: "Processando",
-      date: "2024-01-15",
-    },
-    {
-      id: "#12344",
-      customer: "Maria Santos",
-      total: 89.9,
-      status: "Enviado",
-      date: "2024-01-15",
-    },
-    {
-      id: "#12343",
-      customer: "Carlos Oliveira",
-      total: 245.5,
-      status: "Entregue",
-      date: "2024-01-14",
-    },
-    {
-      id: "#12342",
-      customer: "Ana Costa",
-      total: 156.8,
-      status: "Cancelado",
-      date: "2024-01-14",
-    },
-  ]
-
-  const lowStockProducts = [
-    { name: "Fio Flexível 2,5mm²", stock: 5, minStock: 20 },
-    { name: "Disjuntor Bipolar 25A", stock: 8, minStock: 15 },
-    { name: "Lâmpada LED 12W", stock: 12, minStock: 30 },
-    { name: "Tubo PVC 32mm", stock: 3, minStock: 25 },
-  ]
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -175,29 +225,39 @@ export function AdminDashboard() {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentOrders.map((order) => (
-                <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-primary/10 p-2 rounded">
-                      <ShoppingCart className="h-4 w-4 text-primary" />
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span className="ml-2">Carregando pedidos...</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {recentOrders.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-primary/10 p-2 rounded">
+                        <ShoppingCart className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{order.order_number}</p>
+                        <p className="text-sm text-muted-foreground">{order.user?.name || 'Cliente não encontrado'}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{order.id}</p>
-                      <p className="text-sm text-muted-foreground">{order.customer}</p>
-                    </div>
-                  </div>
 
-                  <div className="text-right">
-                    <p className="font-medium">{formatPrice(order.total)}</p>
-                    <Badge className={`${getStatusColor(order.status)} flex items-center gap-1`}>
-                      {getStatusIcon(order.status)}
-                      {order.status}
-                    </Badge>
+                    <div className="text-right">
+                      <p className="font-medium">{formatPrice(order.total_amount)}</p>
+                      <Badge className={`${getStatusColor(order.status)} flex items-center gap-1`}>
+                        {getStatusIcon(order.status)}
+                        {getStatusLabel(order.status)}
+                      </Badge>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+                {recentOrders.length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">Nenhum pedido encontrado</p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -217,19 +277,29 @@ export function AdminDashboard() {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {lowStockProducts.map((product, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <p className="font-medium text-sm">{product.name}</p>
-                    <span className="text-sm text-muted-foreground">
-                      {product.stock}/{product.minStock}
-                    </span>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span className="ml-2">Carregando produtos...</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {lowStockProducts.map((product, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <p className="font-medium text-sm">{product.name}</p>
+                      <span className="text-sm text-muted-foreground">
+                        {product.stock_quantity}/{product.min_stock}
+                      </span>
+                    </div>
+                    <Progress value={(product.stock_quantity / product.min_stock) * 100} className="h-2" />
                   </div>
-                  <Progress value={(product.stock / product.minStock) * 100} className="h-2" />
-                </div>
-              ))}
-            </div>
+                ))}
+                {lowStockProducts.length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">Todos os produtos com estoque adequado</p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

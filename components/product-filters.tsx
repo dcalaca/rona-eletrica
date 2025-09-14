@@ -1,50 +1,80 @@
 "use client"
 
-import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { X } from "lucide-react"
+import { X, Loader2 } from "lucide-react"
+import { useCategories } from "@/hooks/use-categories"
+import { useBrands } from "@/hooks/use-brands"
 
-export function ProductFilters() {
-  const [priceRange, setPriceRange] = useState([0, 1000])
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([])
+interface ProductFiltersProps {
+  onFiltersChange?: (filters: {
+    categories: string[]
+    brands: string[]
+    priceRange: [number, number]
+  }) => void
+  categories: string[]
+  brands: string[]
+  priceRange: [number, number]
+}
 
-  const categories = [
-    { id: "fios-cabos", name: "Fios e Cabos", count: 156 },
-    { id: "disjuntores", name: "Disjuntores", count: 89 },
-    { id: "tubos-conexoes", name: "Tubos e Conexões", count: 234 },
-    { id: "ferramentas", name: "Ferramentas", count: 67 },
-    { id: "iluminacao", name: "Iluminação", count: 123 },
-    { id: "bombas", name: "Bombas d'Água", count: 45 },
-  ]
-
-  const brands = [
-    { id: "prysmian", name: "Prysmian", count: 78 },
-    { id: "tigre", name: "Tigre", count: 156 },
-    { id: "schneider", name: "Schneider", count: 89 },
-    { id: "weg", name: "WEG", count: 67 },
-    { id: "philips", name: "Philips", count: 45 },
-    { id: "osram", name: "Osram", count: 34 },
-  ]
+export function ProductFilters({ 
+  onFiltersChange, 
+  categories: selectedCategories,
+  brands: selectedBrands,
+  priceRange
+}: ProductFiltersProps) {
+  const { categories, loading: categoriesLoading } = useCategories()
+  const { brands, loading: brandsLoading } = useBrands()
 
   const toggleCategory = (categoryId: string) => {
-    setSelectedCategories((prev) =>
-      prev.includes(categoryId) ? prev.filter((id) => id !== categoryId) : [...prev, categoryId],
-    )
+    const newCategories = selectedCategories.includes(categoryId) 
+      ? selectedCategories.filter((id) => id !== categoryId) 
+      : [...selectedCategories, categoryId]
+    
+    if (onFiltersChange) {
+      onFiltersChange({
+        categories: newCategories,
+        brands: selectedBrands,
+        priceRange: priceRange
+      })
+    }
   }
 
   const toggleBrand = (brandId: string) => {
-    setSelectedBrands((prev) => (prev.includes(brandId) ? prev.filter((id) => id !== brandId) : [...prev, brandId]))
+    const newBrands = selectedBrands.includes(brandId) 
+      ? selectedBrands.filter((id) => id !== brandId) 
+      : [...selectedBrands, brandId]
+    
+    if (onFiltersChange) {
+      onFiltersChange({
+        categories: selectedCategories,
+        brands: newBrands,
+        priceRange: priceRange
+      })
+    }
   }
 
   const clearFilters = () => {
-    setSelectedCategories([])
-    setSelectedBrands([])
-    setPriceRange([0, 1000])
+    if (onFiltersChange) {
+      onFiltersChange({
+        categories: [],
+        brands: [],
+        priceRange: [0, 1000]
+      })
+    }
+  }
+
+  const handlePriceRangeChange = (newRange: number[]) => {
+    if (onFiltersChange) {
+      onFiltersChange({
+        categories: selectedCategories,
+        brands: selectedBrands,
+        priceRange: newRange as [number, number]
+      })
+    }
   }
 
   return (
@@ -92,7 +122,13 @@ export function ProductFilters() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <Slider value={priceRange} onValueChange={setPriceRange} max={1000} step={10} className="w-full" />
+            <Slider 
+              value={priceRange} 
+              onValueChange={handlePriceRangeChange}
+              max={1000} 
+              step={10} 
+              className="w-full" 
+            />
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>R$ {priceRange[0]}</span>
               <span>R$ {priceRange[1]}</span>
@@ -107,24 +143,29 @@ export function ProductFilters() {
           <CardTitle className="text-sm">Categorias</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {categories.map((category) => (
-              <div key={category.id} className="flex items-center space-x-2">
-                <Checkbox
-                  id={category.id}
-                  checked={selectedCategories.includes(category.id)}
-                  onCheckedChange={() => toggleCategory(category.id)}
-                />
-                <label
-                  htmlFor={category.id}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 cursor-pointer"
-                >
-                  {category.name}
-                </label>
-                <span className="text-xs text-muted-foreground">({category.count})</span>
-              </div>
-            ))}
-          </div>
+          {categoriesLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {categories.map((category) => (
+                <div key={category.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={category.id}
+                    checked={selectedCategories.includes(category.id)}
+                    onCheckedChange={() => toggleCategory(category.id)}
+                  />
+                  <label
+                    htmlFor={category.id}
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 cursor-pointer"
+                  >
+                    {category.name}
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -134,24 +175,29 @@ export function ProductFilters() {
           <CardTitle className="text-sm">Marcas</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {brands.map((brand) => (
-              <div key={brand.id} className="flex items-center space-x-2">
-                <Checkbox
-                  id={brand.id}
-                  checked={selectedBrands.includes(brand.id)}
-                  onCheckedChange={() => toggleBrand(brand.id)}
-                />
-                <label
-                  htmlFor={brand.id}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 cursor-pointer"
-                >
-                  {brand.name}
-                </label>
-                <span className="text-xs text-muted-foreground">({brand.count})</span>
-              </div>
-            ))}
-          </div>
+          {brandsLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {brands.map((brand) => (
+                <div key={brand.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={brand.id}
+                    checked={selectedBrands.includes(brand.id)}
+                    onCheckedChange={() => toggleBrand(brand.id)}
+                  />
+                  <label
+                    htmlFor={brand.id}
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 cursor-pointer"
+                  >
+                    {brand.name}
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

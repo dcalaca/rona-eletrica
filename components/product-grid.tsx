@@ -7,46 +7,110 @@ import { Badge } from "@/components/ui/badge"
 import { Star, ShoppingCart, Heart, Eye, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useProducts } from "@/hooks/use-products"
+import { useWishlist } from "@/hooks/use-wishlist"
+import { useCartContext } from "@/contexts/cart-context"
+import { useSession } from "next-auth/react"
+import { toast } from "@/hooks/use-toast"
 
 interface ProductGridProps {
-  category?: string
-  brand?: string
+  categories?: string[]
+  brands?: string[]
   search?: string
   minPrice?: number
   maxPrice?: number
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
   featured?: boolean
+  offers?: boolean
 }
 
 export function ProductGrid({ 
-  category, 
-  brand, 
+  categories, 
+  brands, 
   search, 
   minPrice, 
   maxPrice, 
   sortBy, 
   sortOrder, 
-  featured 
+  featured,
+  offers
 }: ProductGridProps) {
-  const [favorites, setFavorites] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
+  const { data: session } = useSession()
+  const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist()
+  const { addToCart } = useCartContext()
 
   const { products, loading, error, pagination, refetch } = useProducts({
     page: currentPage,
     limit: 12,
-    category,
-    brand,
+    categories,
+    brands,
     search,
     minPrice,
     maxPrice,
     sortBy,
     sortOrder,
-    featured
+    featured,
+    offers
   })
 
-  const toggleFavorite = (productId: string) => {
-    setFavorites((prev) => (prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]))
+
+  const toggleFavorite = async (productId: string) => {
+    if (!session?.user?.id) {
+      toast({
+        title: "Login necessário",
+        description: "Faça login para adicionar produtos aos favoritos",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      if (isInWishlist(productId)) {
+        await removeFromWishlist(productId)
+        toast({
+          title: "Sucesso",
+          description: "Produto removido da lista de desejos",
+        })
+      } else {
+        await addToWishlist(productId)
+        toast({
+          title: "Sucesso",
+          description: "Produto adicionado à lista de desejos",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar lista de desejos",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleAddToCart = async (productId: string) => {
+    if (!session?.user?.id) {
+      toast({
+        title: "Login necessário",
+        description: "Faça login para adicionar produtos ao carrinho",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await addToCart(productId, 1)
+      toast({
+        title: "Sucesso",
+        description: "Produto adicionado ao carrinho",
+      })
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao adicionar produto ao carrinho",
+        variant: "destructive",
+      })
+    }
   }
 
   const formatPrice = (price: number) => {
@@ -79,10 +143,42 @@ export function ProductGrid({
   }
 
   if (error) {
+    console.error('❌ [ProductGrid] Erro:', error)
     return (
       <div className="text-center py-12">
-        <p className="text-red-500 mb-4">{error}</p>
+        <p className="text-red-500 mb-4">Erro ao carregar produtos</p>
         <Button onClick={refetch}>Tentar novamente</Button>
+      </div>
+    )
+  }
+
+  // Se não há produtos e não está carregando, mostrar mensagem de "sem ofertas"
+  if (!loading && products.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <div className="max-w-md mx-auto">
+          <div className="mb-6">
+            <div className="w-24 h-24 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
+              <span className="text-4xl">🏷️</span>
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Nenhuma oferta disponível no momento</h3>
+            <p className="text-muted-foreground mb-6">
+              Que pena! Não temos ofertas especiais hoje, mas volte em breve para conferir nossas promoções.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <Button asChild className="w-full">
+              <Link href="/produtos">
+                Ver todos os produtos
+              </Link>
+            </Button>
+            <Button variant="outline" asChild className="w-full">
+              <Link href="/categorias">
+                Explorar categorias
+              </Link>
+            </Button>
+          </div>
+        </div>
       </div>
     )
   }
@@ -130,7 +226,7 @@ export function ProductGrid({
                     className="h-8 w-8"
                     onClick={() => toggleFavorite(product.id)}
                   >
-                    <Heart className={`h-4 w-4 ${favorites.includes(product.id) ? "fill-current text-red-500" : ""}`} />
+                    <Heart className={`h-4 w-4 ${isInWishlist(product.id) ? "fill-current text-red-500" : ""}`} />
                   </Button>
                   <Button variant="secondary" size="icon" className="h-8 w-8" asChild>
                     <Link href={`/produtos/${product.id}`}>
@@ -183,6 +279,7 @@ export function ProductGrid({
                 className="w-full" 
                 disabled={product.stock_quantity <= 0} 
                 size="sm"
+                onClick={() => handleAddToCart(product.id)}
               >
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 {product.stock_quantity > 0 ? "Adicionar ao Carrinho" : "Indisponível"}

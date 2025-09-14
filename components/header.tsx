@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CartSidebar } from "@/components/cart-sidebar"
 import { Search, User, Menu, X, Phone, MapPin } from "lucide-react"
+import { useSession } from "next-auth/react"
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const { data: session, status } = useSession()
 
   return (
-    <header className="bg-background border-b border-border">
+    <header className="sticky top-0 z-50 bg-background border-b border-border">
       {/* Top bar with contact info */}
       <div className="bg-primary text-primary-foreground py-2">
         <div className="container mx-auto px-4 flex justify-between items-center text-sm">
@@ -59,9 +61,15 @@ export function Header() {
             <CartSidebar />
 
             {/* User account */}
-            <Button variant="ghost" size="sm">
-              <User className="h-5 w-5" />
-              <span className="hidden md:inline ml-2">Minha Conta</span>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/minha-conta">
+                <User className="h-5 w-5" />
+                <span className="hidden md:inline ml-2">
+                  {status === "loading" ? "Carregando..." : 
+                   session?.user?.name ? `Olá, ${session.user.name.split(' ')[0]}` : 
+                   "Minha Conta"}
+                </span>
+              </Link>
             </Button>
 
             {/* Mobile menu toggle */}
